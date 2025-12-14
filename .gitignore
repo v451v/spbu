@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+.pytest_cache/
+
+# OS / editors
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp
+
+build/
+dist/
+wheels/
+*.egg-info
+docs/
+
+# Virtual environments
+.venv/
+.env
+
+# Streamlit / app outputs
+/.streamlit/
+/*.html
+
+# PyInstaller
+*.spec.bak
