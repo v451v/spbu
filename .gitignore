@@ -26,3 +26,6 @@ docs/
 
 # PyInstaller
 *.spec.bak
+
+# Toml files
+*.toml

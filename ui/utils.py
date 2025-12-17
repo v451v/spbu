@@ -11,7 +11,7 @@ def build_models(state):
     """Конвертировать state в Pydantic-модели."""
     cleaned_layers = []
     for layer in state["layers"]:
-        cleaned = {k: v for k, v in layer.items() if v is not None}
+        cleaned = {k: v for k, v in layer.items() if v is not None and k != "_id"}
         cleaned.setdefault("c", 0.0)
         cleaned_layers.append(cleaned)
 
@@ -27,7 +27,7 @@ def build_models(state):
 def export_toml(state) -> str:
     """Экспортировать state в TOML-строку."""
     # Фильтруем None значения из слоёв
-    layers = [{k: v for k, v in layer.items() if v is not None} for layer in state["layers"]]
+    layers = [{k: v for k, v in layer.items() if v is not None and k != "_id"} for layer in state["layers"]]
 
     # Фильтруем None и нулевые значения из foundation (кроме area)
     foundation = {k: v for k, v in state["foundation"].items() if v is not None and (v != 0 or k == "area")}

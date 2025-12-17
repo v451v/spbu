@@ -1,8 +1,11 @@
 """Streamlit приложение для расчёта основания СПБУ."""
 
+import os
+import sys
+import hashlib
 import streamlit as st
 from ui.state import init_state
-from ui.components.soil_editor import render_soil_editor
+from ui.components.soil_editor import render_soil_editor, clear_soil_editor_keys
 from ui.components.foundation_form import render_foundation_form
 from ui.components.loads_form import render_loads_form
 from ui.components.coefficients_form import render_coefficients_form
@@ -86,18 +89,18 @@ def render_sidebar():
 
     if uploaded_file is not None:
         # Проверяем, что файл не был уже загружен
-        file_id = uploaded_file.file_id
+        file_bytes = uploaded_file.getvalue()
+        file_id = getattr(uploaded_file, "file_id", None) or hashlib.sha256(file_bytes).hexdigest()
         if "last_uploaded_file_id" not in st.session_state or st.session_state.last_uploaded_file_id != file_id:
             try:
-                new_state = import_toml(uploaded_file.read())
+                new_state = import_toml(file_bytes)
                 # Обновляем все поля session_state
                 for key, value in new_state.items():
                     st.session_state[key] = value
                 # Очищаем результат расчёта при загрузке новых данных
                 st.session_state.result = None
-                # Очищаем внутреннее состояние data_editor для обновления таблицы
-                if "layers_editor" in st.session_state:
-                    del st.session_state["layers_editor"]
+                # Очищаем ключи soil_editor чтобы виджеты подхватили новые данные
+                clear_soil_editor_keys()
                 # Сохраняем ID файла
                 st.session_state.last_uploaded_file_id = file_id
                 st.success("✅ Данные успешно загружены из TOML!")
