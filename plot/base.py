@@ -77,7 +77,16 @@ class BasePlotter:
             tickfont=dict(family=FONT_FAMILY, size=FONT_SIZE, color=self.colors["text"]),
             mirror=True, showticklabels=True,
         )
-        self.fig.update_yaxes(title=dict(text="<b>Глубина <i>d</i>, м</b>", standoff=15), **y_axis_config, row=1, col=1)
+        self.fig.update_yaxes(
+            title=dict(
+                text="<b>Глубина <i>d</i>, м</b>",
+                standoff=15,
+                font=dict(family=FONT_FAMILY, size=FONT_SIZE, color=self.colors["text"]),
+            ),
+            **y_axis_config,
+            row=1,
+            col=1,
+        )
         self.fig.update_yaxes(**y_axis_config, row=1, col=2)
 
         # Общие настройки оси X

@@ -70,8 +70,8 @@ LABELS = {
         "show_nu_design": True,
     },
     "western": {
-        "title_left": "<b>Ultimate capacity: <i>V<sub>L</sub></i>(<i>d</i>)</b>",
-        "title_right": "<b>Bearing pressure: <i>R</i>(<i>d</i>)</b>",
+        "title_left": "<b>Предельная несущая способность: <i>V<sub>L</sub></i>(<i>d</i>)</b>",
+        "title_right": "<b>Контактное давление: <i>R</i>(<i>d</i>)</b>",
         "nu_label": "<i>V<sub>L</sub></i>",
         "nu_design_label": "",
         "r_label": "<i>R</i> = <i>V<sub>L</sub></i>/<i>A</i>",

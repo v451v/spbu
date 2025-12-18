@@ -11,12 +11,20 @@ def render_foundation_form():
     foundation = st.session_state.foundation
     method = st.session_state.method
 
+    def _float_or(default: float, value) -> float:
+        if value is None:
+            return float(default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
     # Основные параметры
     foundation["area"] = st.number_input(
         "Площадь подошвы, м²",
         min_value=1.0,
         max_value=1000.0,
-        value=foundation.get("area", 154.0),
+        value=_float_or(154.0, foundation.get("area", 154.0)),
         step=1.0,
         help="Для круглого башмака: A = πD²/4",
     )
@@ -27,7 +35,7 @@ def render_foundation_form():
             "Эксцентриситет e_x, м",
             min_value=0.0,
             max_value=10.0,
-            value=foundation.get("e_x", 0.0),
+            value=_float_or(0.0, foundation.get("e_x", 0.0)),
             step=0.1,
         )
     with col2:
@@ -35,7 +43,7 @@ def render_foundation_form():
             "Эксцентриситет e_y, м",
             min_value=0.0,
             max_value=10.0,
-            value=foundation.get("e_y", 0.0),
+            value=_float_or(0.0, foundation.get("e_y", 0.0)),
             step=0.1,
         )
 
@@ -48,14 +56,14 @@ def render_foundation_form():
             foundation["V_spud"] = st.number_input(
                 "V_spud, м³",
                 min_value=0.0,
-                value=foundation.get("V_spud") or 0.0,
+                value=_float_or(0.0, foundation.get("V_spud")),
                 step=1.0,
                 help="Полный объём башмака",
             )
             foundation["D_eff"] = st.number_input(
                 "D_eff, м",
                 min_value=0.0,
-                value=foundation.get("D_eff") or 0.0,
+                value=_float_or(0.0, foundation.get("D_eff")),
                 step=0.1,
                 help="Эффективный диаметр шипа",
             )
@@ -63,7 +71,7 @@ def render_foundation_form():
             foundation["V_D"] = st.number_input(
                 "V_D, м³",
                 min_value=0.0,
-                value=foundation.get("V_D") or 0.0,
+                value=_float_or(0.0, foundation.get("V_D")),
                 step=1.0,
                 help="Объём ниже уровня макс. площади",
             )
@@ -71,7 +79,7 @@ def render_foundation_form():
                 "β, °",
                 min_value=0.0,
                 max_value=180.0,
-                value=foundation.get("beta") or 60.0,
+                value=_float_or(60.0, foundation.get("beta")),
                 step=1.0,
                 help="Угол конуса шипа",
             )

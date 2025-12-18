@@ -78,7 +78,7 @@ def find_equilibrium_depth(
     """Найти безопасную глубину равновесия где F ≤ Vl(d).
 
     ВАЖНО: При punch-through кривая Vl(d) немонотонна.
-    Ищем глубину, после которой нет провалов (зон с η₁ > 1).
+    Ищем МИНИМАЛЬНУЮ глубину, после которой нет провалов (зон с η₁ > 1).
 
     Args:
         layers: Список слоёв.
@@ -101,16 +101,22 @@ def find_equilibrium_depth(
     if not safe_indices:
         return None
 
-    # Ищем безопасную глубину (без провалов ниже)
-    for i in range(len(safe_indices) - 1, -1, -1):
-        idx = safe_indices[i]
-        has_instability_below = any(
-            curve[j].eta1 > 1.0 for j in range(idx + 1, len(curve))
-        )
-        if not has_instability_below:
-            return curve[idx]
+    unsafe_indices = [i for i, res in enumerate(curve) if res.eta1 > 1.0]
 
-    return curve[safe_indices[-1]]
+    # Если провалов нет — возвращаем первую безопасную точку.
+    if not unsafe_indices:
+        return curve[safe_indices[0]]
+
+    # Безопасная зона начинается сразу после последнего провала.
+    idx = max(unsafe_indices) + 1
+    if idx >= len(curve):
+        return None
+
+    for j in range(idx, len(curve)):
+        if curve[j].eta1 <= 1.0:
+            return curve[j]
+
+    return None
 
 
 def find_all_equilibrium_depths(
