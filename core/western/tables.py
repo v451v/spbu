@@ -14,6 +14,43 @@ import numpy as np
 
 NC_CLAY = 5.14  # Коэффициент несущей способности для глин (φ=0)
 
+_ISO_CLAY_FACTOR_TABLE_23_1 = (
+    (0.0, 6.0),
+    (0.1, 6.3),
+    (0.25, 6.6),
+    (0.5, 7.0),
+    (1.0, 7.7),
+    (2.5, 9.0),
+)
+
+
+@lru_cache(maxsize=512)
+def clay_factor_iso_table_23_1(D_over_B: float) -> float:
+    """Табличный множитель Nc·s·dc для круглого башмака в глинах (Табл. 2.3-1).
+
+    Примечание из методики: ISO 19905-1 / ГОСТ Р 59997 допускают использовать
+    табличный множитель Nc·s·dc в зависимости от D/B.
+
+    Интерполяция: кусочно-линейная по узлам таблицы.
+    """
+    if not np.isfinite(D_over_B):
+        return float(_ISO_CLAY_FACTOR_TABLE_23_1[0][1])
+
+    x = float(D_over_B)
+    if x <= _ISO_CLAY_FACTOR_TABLE_23_1[0][0]:
+        return float(_ISO_CLAY_FACTOR_TABLE_23_1[0][1])
+    if x >= _ISO_CLAY_FACTOR_TABLE_23_1[-1][0]:
+        return float(_ISO_CLAY_FACTOR_TABLE_23_1[-1][1])
+
+    for (x0, y0), (x1, y1) in zip(_ISO_CLAY_FACTOR_TABLE_23_1, _ISO_CLAY_FACTOR_TABLE_23_1[1:]):
+        if x0 <= x <= x1:
+            if x1 == x0:
+                return float(y0)
+            t = (x - x0) / (x1 - x0)
+            return float(y0 + t * (y1 - y0))
+
+    return float(_ISO_CLAY_FACTOR_TABLE_23_1[-1][1])
+
 
 # --- Коэффициенты несущей способности для песков (C.2.9) ---
 
@@ -55,8 +92,8 @@ def bearing_factors_sand(phi_deg: float) -> tuple[float, float]:
 def shape_factor_clay(B: float, L: float) -> float:
     """Коэффициент формы sc для глин (SNAME).
 
-    sc = 1 + 0.2·(B/L) для прямоугольного фундамента.
-    sc = 1.2 для круглого/квадратного (B=L).
+    По методике (C.2.3.1): sc = 1 + (Nq/Nc)·(B/L).
+    Для φ=0 обычно принимают Nq=1, Nc=5.14 => sc = 1 + (1/Nc)·(B/L).
 
     Args:
         B: Ширина (или диаметр) фундамента, м.
@@ -66,15 +103,15 @@ def shape_factor_clay(B: float, L: float) -> float:
         sc
     """
     if L <= 0:
-        return 1.2
-    return 1.0 + 0.2 * (B / L)
+        return 1.0 + (1.0 / NC_CLAY)
+    return 1.0 + (1.0 / NC_CLAY) * (B / L)
 
 
 def shape_factors_sand(B: float, L: float, phi_deg: float) -> tuple[float, float]:
     """Коэффициенты формы sγ, sq для песков (SNAME/ISO).
 
     sγ = 1 - 0.4·(B/L)  (≥ 0.6)
-    sq = 1 + (B/L)·sinφ
+    sq = 1 + (B/L)·tanφ
 
     Args:
         B: Ширина фундамента, м.
@@ -90,7 +127,7 @@ def shape_factors_sand(B: float, L: float, phi_deg: float) -> tuple[float, float
         ratio = B / L
 
     s_gamma = max(0.6, 1.0 - 0.4 * ratio)
-    s_q = 1.0 + ratio * np.sin(np.radians(phi_deg))
+    s_q = 1.0 + ratio * np.tan(np.radians(phi_deg))
 
     return float(s_gamma), float(s_q)
 

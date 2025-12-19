@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from core.models import Foundation, SoilLayer
+from core.models import Foundation, SoilLayer, SoilProfileCache
 
 
 # =============================================================================
@@ -14,7 +14,7 @@ from core.models import Foundation, SoilLayer
 
 UNDRAINED_SOIL_TYPES = frozenset({
     "clay", "clay_soft", "clay_plastic", "clay_stiff",
-    "silty_clay", "organic", "peat",
+    "organic", "peat",
 })
 
 DRAINED_SOIL_TYPES = frozenset({
@@ -23,8 +23,13 @@ DRAINED_SOIL_TYPES = frozenset({
 })
 
 DUAL_DRAINAGE_SOIL_TYPES = frozenset({
-    "silt", "sandy_silt", "silty_sand",
+    "silt", "sandy_silt", "silty_sand", "silty_clay",
 })
+
+
+def build_profile_cache(layers: list[SoilLayer]) -> SoilProfileCache:
+    """Подготовить кэш разреза для ускорения расчётов."""
+    return SoilProfileCache.from_layers(layers)
 
 
 def shape_factors(eta: float) -> tuple[float, float, float]:
@@ -51,11 +56,17 @@ def get_layer_at_depth(layers: list[SoilLayer], depth: float) -> SoilLayer | Non
     return layers[-1] if layers and depth > z else None
 
 
-def overburden_stress(layers: list[SoilLayer], depth: float) -> float:
+def overburden_stress(
+    layers: list[SoilLayer],
+    depth: float,
+    cache: SoilProfileCache | None = None,
+) -> float:
     """Бытовое давление σzg = Σ(γ'ᵢ · hᵢ), кПа.
     
     При depth > суммарной толщины слоёв — экстраполяция последним слоем.
     """
+    if cache is not None:
+        return cache.overburden_stress(depth)
     if not layers or depth <= 0:
         return 0.0
     
@@ -203,7 +214,10 @@ def average_gamma_above(layers: list[SoilLayer], d: float) -> float:
 
 
 def average_cu_below(
-    layers: list[SoilLayer], d: float, z_thickness: float
+    layers: list[SoilLayer],
+    d: float,
+    z_thickness: float,
+    cache: SoilProfileCache | None = None,
 ) -> float:
     """Средневзвешенная недренированная прочность cu ниже подошвы (C.2.7).
     
@@ -212,6 +226,8 @@ def average_cu_below(
         d: Глубина подошвы, м.
         z_thickness: Толщина зоны усреднения, м (обычно ~1.0·B).
     """
+    if cache is not None:
+        return cache.average_cu_below(d, z_thickness)
     if not layers or z_thickness <= 0:
         layer = layers[-1] if layers else None
         return layer.cu or layer.c if layer else 0.0
@@ -245,8 +261,87 @@ def average_cu_below(
     return cu_sum / total_h if total_h > 0 else 0.0
 
 
+def cu_variability_ratio(
+    layers: list[SoilLayer],
+    d: float,
+    z_thickness: float,
+    cache: SoilProfileCache | None = None,
+) -> float:
+    """Относительная изменчивость cu на интервале (max-min)/max."""
+    if z_thickness <= 0:
+        return 0.0
+
+    if cache is not None:
+        if not cache.cu:
+            return 0.0
+        z_start, z_end = d, d + z_thickness
+        cu_min = None
+        cu_max = None
+
+        start_idx = cache._layer_index(z_start)
+        end_idx = cache._layer_index(min(z_end, cache.total_thickness))
+
+        for i in range(start_idx, end_idx + 1):
+            z_top = cache.boundaries[i]
+            z_bot = cache.boundaries[i + 1]
+            h = min(z_bot, z_end) - max(z_top, z_start)
+            if h <= 0:
+                continue
+            cu_val = cache.cu[i]
+            if cu_val <= 0:
+                continue
+            cu_min = cu_val if cu_min is None else min(cu_min, cu_val)
+            cu_max = cu_val if cu_max is None else max(cu_max, cu_val)
+
+        if z_end > cache.total_thickness:
+            cu_val = cache.cu[-1]
+            if cu_val > 0:
+                cu_min = cu_val if cu_min is None else min(cu_min, cu_val)
+                cu_max = cu_val if cu_max is None else max(cu_max, cu_val)
+
+        if cu_max is None or cu_max <= 0:
+            return 0.0
+        return (cu_max - cu_min) / cu_max
+
+    if not layers:
+        return 0.0
+
+    z_start, z_end = d, d + z_thickness
+    cu_min = None
+    cu_max = None
+    total_depth = sum(L.thickness for L in layers)
+
+    z = 0.0
+    for layer in layers:
+        z_top, z_bot = z, z + layer.thickness
+        z = z_bot
+
+        h = min(z_bot, z_end) - max(z_top, z_start)
+        if h <= 0:
+            continue
+
+        cu_val = layer.cu if layer.cu is not None else layer.c
+        if cu_val <= 0:
+            continue
+        cu_min = cu_val if cu_min is None else min(cu_min, cu_val)
+        cu_max = cu_val if cu_max is None else max(cu_max, cu_val)
+
+    if z_end > total_depth and layers:
+        cu_val = layers[-1].cu if layers[-1].cu is not None else layers[-1].c
+        if cu_val > 0:
+            cu_min = cu_val if cu_min is None else min(cu_min, cu_val)
+            cu_max = cu_val if cu_max is None else max(cu_max, cu_val)
+
+    if cu_max is None or cu_max <= 0:
+        return 0.0
+    return (cu_max - cu_min) / cu_max
+
+
 def average_sand_props_below(
-    layers: list[SoilLayer], d: float, z_thickness: float
+    layers: list[SoilLayer],
+    d: float,
+    z_thickness: float,
+    cache: SoilProfileCache | None = None,
 ) -> tuple[float, float]:
     """Средневзвешенные свойства песка (φ, γ') ниже подошвы (C.2.9).
     
@@ -258,6 +353,8 @@ def average_sand_props_below(
     Returns:
         (phi_avg, gamma_prime_avg)
     """
+    if cache is not None:
+        return cache.average_sand_props_below(d, z_thickness)
     if not layers or z_thickness <= 0:
         layer = layers[-1] if layers else None
         if layer:

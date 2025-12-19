@@ -1,5 +1,8 @@
 """Модели данных для расчёта основания СПБУ."""
 
+import math
+from bisect import bisect_left
+from dataclasses import dataclass
 from typing import Literal
 from pydantic import BaseModel, Field, computed_field, model_validator
 
@@ -55,6 +58,144 @@ class SoilProfile(BaseModel):
         return sum(layer.thickness for layer in self.layers)
 
 
+@dataclass(frozen=True)
+class SoilProfileCache:
+    """Кэш параметров разреза для ускорения повторных расчётов."""
+
+    layers: list[SoilLayer]
+    boundaries: list[float]
+    gamma_prime: list[float]
+    phi: list[float]
+    cu: list[float]
+    total_thickness: float
+    cum_gamma: list[float]
+
+    @classmethod
+    def from_layers(cls, layers: list[SoilLayer]) -> "SoilProfileCache":
+        if not layers:
+            return cls(
+                layers=[],
+                boundaries=[0.0],
+                gamma_prime=[],
+                phi=[],
+                cu=[],
+                total_thickness=0.0,
+                cum_gamma=[0.0],
+            )
+
+        boundaries = [0.0]
+        gamma_prime = []
+        phi = []
+        cu = []
+        cum_gamma = [0.0]
+
+        for layer in layers:
+            thickness = layer.thickness
+            boundaries.append(boundaries[-1] + thickness)
+            gamma_prime.append(layer.gamma_prime)
+            phi.append(layer.phi)
+            cu_value = layer.cu if layer.cu is not None else layer.c
+            cu.append(cu_value)
+            cum_gamma.append(cum_gamma[-1] + layer.gamma_prime * thickness)
+
+        return cls(
+            layers=layers,
+            boundaries=boundaries,
+            gamma_prime=gamma_prime,
+            phi=phi,
+            cu=cu,
+            total_thickness=boundaries[-1],
+            cum_gamma=cum_gamma,
+        )
+
+    def _layer_index(self, depth: float) -> int:
+        if not self.gamma_prime:
+            return 0
+        if depth <= 0.0:
+            return 0
+        if depth >= self.total_thickness:
+            return len(self.gamma_prime) - 1
+
+        idx = bisect_left(self.boundaries, depth) - 1
+        return max(0, min(idx, len(self.gamma_prime) - 1))
+
+    def overburden_stress(self, depth: float) -> float:
+        if depth <= 0 or not self.gamma_prime:
+            return 0.0
+
+        if depth >= self.total_thickness:
+            extra = depth - self.total_thickness
+            return self.cum_gamma[-1] + self.gamma_prime[-1] * extra
+
+        idx = self._layer_index(depth)
+        z_top = self.boundaries[idx]
+        return self.cum_gamma[idx] + self.gamma_prime[idx] * (depth - z_top)
+
+    def average_cu_below(self, d: float, z_thickness: float) -> float:
+        if not self.cu or z_thickness <= 0:
+            return self.cu[-1] if self.cu else 0.0
+
+        z_start, z_end = d, d + z_thickness
+        total_h = 0.0
+        cu_sum = 0.0
+
+        start_idx = self._layer_index(z_start)
+        end_idx = self._layer_index(min(z_end, self.total_thickness))
+
+        for i in range(start_idx, end_idx + 1):
+            z_top = self.boundaries[i]
+            z_bot = self.boundaries[i + 1]
+            h = min(z_bot, z_end) - max(z_top, z_start)
+            if h <= 0:
+                continue
+            total_h += h
+            cu_sum += self.cu[i] * h
+
+        if z_end > self.total_thickness:
+            extra = z_end - max(self.total_thickness, z_start)
+            if extra > 0:
+                total_h += extra
+                cu_sum += self.cu[-1] * extra
+
+        return cu_sum / total_h if total_h > 0 else 0.0
+
+    def average_sand_props_below(self, d: float, z_thickness: float) -> tuple[float, float]:
+        if not self.phi or not self.gamma_prime or z_thickness <= 0:
+            if self.phi and self.gamma_prime:
+                return self.phi[-1], self.gamma_prime[-1]
+            return 30.0, 10.0
+
+        z_start, z_end = d, d + z_thickness
+        total_h = 0.0
+        phi_sum = 0.0
+        gamma_sum = 0.0
+
+        start_idx = self._layer_index(z_start)
+        end_idx = self._layer_index(min(z_end, self.total_thickness))
+
+        for i in range(start_idx, end_idx + 1):
+            z_top = self.boundaries[i]
+            z_bot = self.boundaries[i + 1]
+            h = min(z_bot, z_end) - max(z_top, z_start)
+            if h <= 0:
+                continue
+            total_h += h
+            phi_sum += self.phi[i] * h
+            gamma_sum += self.gamma_prime[i] * h
+
+        if z_end > self.total_thickness:
+            extra = z_end - max(self.total_thickness, z_start)
+            if extra > 0:
+                total_h += extra
+                phi_sum += self.phi[-1] * extra
+                gamma_sum += self.gamma_prime[-1] * extra
+
+        if total_h <= 0:
+            return self.phi[-1], self.gamma_prime[-1]
+
+        return phi_sum / total_h, gamma_sum / total_h
+
+
 # --- Фундамент ---
 
 
@@ -106,6 +247,18 @@ class Foundation(BaseModel):
     def eta(self) -> float:
         """η = l'/b' (≥1, для круглого = 1)."""
         return max(1.0, self.l_prime / self.b_prime)
+
+    @computed_field
+    @property
+    def B_eff(self) -> float:
+        """Эффективный диаметр B для западной методики (C.2).
+
+        Определение из методики: B — эффективный диаметр опоры (башмака) на глубине
+        максимального его соприкосновения с грунтом; для прямоугольного башмака равен ширине.
+
+        В текущей реализации предполагается круглая эквивалентная площадь A' => B = √(4A'/π).
+        """
+        return math.sqrt(4.0 * self.area_prime / math.pi)
 
 
 # --- Коэффициенты ---

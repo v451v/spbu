@@ -23,7 +23,6 @@ from .bearing import (
     bearing_capacity_sand,
     bearing_capacity_squeezing,
     bearing_capacity_Vl,
-    detect_failure_mechanism,
 )
 from core.helpers import (
     buoyancy_force,
@@ -57,7 +56,6 @@ __all__ = [
     "bearing_capacity_squeezing",
     "bearing_capacity_punch_through_clay",
     "bearing_capacity_punch_through_sand_clay",
-    "detect_failure_mechanism",
     "bearing_capacity_Qv",
     "bearing_capacity_Vl",
     # Penetration

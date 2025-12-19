@@ -58,8 +58,10 @@ def calculate(
     else:
         # Западная методика (SNAME/ISO)
         curve = western.penetration_curve(layers, foundation, coef, F_operation, d_max, d_step)
-        eq_operation = western.find_equilibrium_depth(layers, foundation, coef, F_operation, d_max)
-        eq_preload = western.find_equilibrium_depth(layers, foundation, coef, F_preload, d_max)
+        # C.2.1: кривую обычно продолжают ниже ожидаемой пенетрации (часто ~1.5×)
+        d_search = 1.5 * d_max
+        eq_operation = western.find_equilibrium_depth(layers, foundation, coef, F_operation, d_search, d_step)
+        eq_preload = western.find_equilibrium_depth(layers, foundation, coef, F_preload, d_search, d_step)
 
         # Осадки не рассчитываются в западной методике
         depths = [r.d for r in curve]
@@ -67,7 +69,7 @@ def calculate(
         
         # Проверка риска punch-through
         punch_through_risk = western.has_punch_through_risk(
-            layers, foundation, coef, F_operation, d_max, d_step
+            layers, foundation, coef, F_operation, d_search, d_step
         )
 
     return CalculationResult(

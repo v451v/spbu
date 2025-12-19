@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from core.helpers import get_layer_at_depth
-from core.models import Coefficients, Foundation, PointResult, SoilLayer
+from core.helpers import build_profile_cache, get_layer_at_depth
+from core.models import Coefficients, Foundation, PointResult, SoilLayer, SoilProfileCache
 
 from .bearing import bearing_capacity_Vl
 
@@ -14,6 +14,7 @@ def calculate_point(
     coef: Coefficients,
     F: float,
     d: float,
+    cache: SoilProfileCache | None = None,
 ) -> PointResult:
     """Расчёт для одной глубины d (западная методика).
 
@@ -32,7 +33,14 @@ def calculate_point(
         return PointResult(d=d, Nu=0.0, R=0.0, p=0.0, eta1=999.0, eta2=999.0, layer_name="Unknown")
 
     # Передаём F для расчёта H_cav по полной формуле C.2.5
-    Vl = bearing_capacity_Vl(layers, foundation, d, F, coef.use_backfill)
+    Vl = bearing_capacity_Vl(
+        layers,
+        foundation,
+        d,
+        F,
+        coef.use_backfill,
+        cache=cache,
+    )
     p = F / foundation.area_prime
 
     R = Vl / foundation.area_prime if foundation.area_prime > 0 else 0.0
@@ -63,8 +71,9 @@ def penetration_curve(
     Returns:
         Список PointResult для каждой глубины.
     """
+    cache = build_profile_cache(layers)
     depths = np.arange(d_step, d_max + d_step / 2, d_step)
-    return [calculate_point(layers, foundation, coef, F, d) for d in depths]
+    return [calculate_point(layers, foundation, coef, F, d, cache=cache) for d in depths]
 
 
 def find_equilibrium_depth(

@@ -216,7 +216,6 @@ def _render_layer(layer: dict, method: str, layer_num: int) -> dict | None:
         with c6:
             soil_type_key = f"soil_type_{lid}"
             current_soil = layer.get("soil_type", "sand_medium")
-            soil_type_idx = _SOIL_TYPES.index(current_soil) if current_soil in _SOIL_TYPES else 1
 
             if soil_type_key not in st.session_state:
                 st.session_state[soil_type_key] = current_soil
@@ -225,7 +224,6 @@ def _render_layer(layer: dict, method: str, layer_num: int) -> dict | None:
                 "Тип грунта",
                 options=_SOIL_TYPES,
                 format_func=lambda x: _SOIL_TYPE_LABELS.get(x, x),
-                index=soil_type_idx,
                 key=soil_type_key,
             )
 
@@ -245,7 +243,6 @@ def _render_layer(layer: dict, method: str, layer_num: int) -> dict | None:
                 drainage_opts = ["drained", "undrained"]
                 drainage_key = f"drainage_{lid}"
                 current_drainage = layer.get("drainage", "drained")
-                drainage_idx = drainage_opts.index(current_drainage) if current_drainage in drainage_opts else 0
 
                 if drainage_key not in st.session_state:
                     st.session_state[drainage_key] = current_drainage
@@ -254,7 +251,6 @@ def _render_layer(layer: dict, method: str, layer_num: int) -> dict | None:
                     "Дренирование",
                     options=drainage_opts,
                     format_func=lambda x: "Дренированный" if x == "drained" else "Недренированный",
-                    index=drainage_idx,
                     key=drainage_key,
                 )
 

@@ -19,6 +19,7 @@ docs/
 # Virtual environments
 .venv/
 .env
+.uv-cache/
 
 # Streamlit / app outputs
 /.streamlit/
